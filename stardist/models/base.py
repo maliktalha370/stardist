@@ -538,10 +538,27 @@ class StarDistBase(BaseModel):
             self._predict_setup(img, axes, normalizer, n_tiles, show_tile_progress, predict_kwargs)
 
         def _prep(prob, dist):
-            prob = np.take(prob,0,axis=channel)
+            if prob is not None:
+
+                prob = np.take(prob,0,axis=channel)
             dist = np.moveaxis(dist,channel,-1)
             dist = np.maximum(1e-3, dist)
             return prob, dist
+
+        def _get_long(multi_mask, small_thresh = 0.5, long_thresh = 0.4):
+
+
+            multi_mask_2 = multi_mask[:, :, 1]
+
+            multi_mask_3 = multi_mask[:, :, 2]
+
+            predicted_mask_2 = np.zeros(multi_mask_2.shape, dtype=np.uint8)
+            predicted_mask_2[multi_mask_2 >= small_thresh] = 1
+
+            predicted_mask_3 = np.zeros(multi_mask_3.shape, dtype=np.uint8)
+            predicted_mask_3[multi_mask_3 >= long_thresh] = 1
+
+            return predicted_mask_2, predicted_mask_3
 
         proba, dista, pointsa, prob_class = [],[],[], []
 
@@ -588,18 +605,33 @@ class StarDistBase(BaseModel):
         else:
             # predict_direct -> prob, dist, [prob_class if multi_class]
             results = predict_direct(x)
-            prob, dist = results[:2]
-            prob, dist = _prep(prob, dist)
-            inds   = _ind_prob_thresh(prob, prob_thresh, b=b)
-            proba = prob[inds].copy()
-            dista = dist[inds].copy()
-            _points = np.stack(np.where(inds), axis=1)
-            pointsa = (_points * np.array(self.config.grid).reshape((1,len(self.config.grid))))
-
             if self._is_multiclass():
-                p = np.moveaxis(results[2],channel,-1)
-                prob_classa = p[inds].copy()
+                prob, dist, prob_class = results
+                small, long  = _get_long(prob_class, long_thresh=0.4)
 
+                _, dist = _prep(None, dist)
+                inds = _ind_prob_thresh(small, prob_thresh, b=b)
+                proba = small[inds].copy()
+                dista = dist[inds].copy()
+                _points = np.stack(np.where(inds), axis=1)
+                pointsa = (_points * np.array(self.config.grid).reshape((1, len(self.config.grid))))
+
+
+
+            else:
+                prob, dist = results[:2]
+
+                prob, dist = _prep(prob, dist)
+                inds   = _ind_prob_thresh(prob, prob_thresh, b=b)
+                proba = prob[inds].copy()
+                dista = dist[inds].copy()
+                _points = np.stack(np.where(inds), axis=1)
+                pointsa = (_points * np.array(self.config.grid).reshape((1,len(self.config.grid))))
+
+
+        if self._is_multiclass():
+            p = np.moveaxis(results[2], channel, -1)
+            prob_classa = p[inds].copy()
 
         proba = np.asarray(proba)
         dista = np.asarray(dista).reshape((-1,self.config.n_rays))
