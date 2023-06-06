@@ -629,9 +629,9 @@ class StarDistBase(BaseModel):
                 pointsa = (_points * np.array(self.config.grid).reshape((1,len(self.config.grid))))
 
 
-        if self._is_multiclass():
-            p = np.moveaxis(results[2], channel, -1)
-            prob_classa = p[inds].copy()
+            if self._is_multiclass():
+                p = np.moveaxis(results[2], channel, -1)
+                prob_classa = p[inds].copy()
 
         proba = np.asarray(proba)
         dista = np.asarray(dista).reshape((-1,self.config.n_rays))
